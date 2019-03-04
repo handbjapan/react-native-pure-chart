@@ -393,13 +393,19 @@ class LineChart extends React.Component {
         data[0] && data[0].color ? data[0].color : lineStyle.borderColor
     }
     if (lastIsBlank) {
+      let styleDetail = {}
+
+      if(dataLength == 2, lastData && lastData.color){
+        styleDetail.borderColor = lastData.color
+      }
+
       result.push(
         this.drawCoordinate(
           dataLength,
           lastData,
           lastCoordinate,
           'rgba(255,255,255,0)',
-          {},
+          styleDetail,
           true,
           true,
           seriesIndex
