@@ -153,6 +153,7 @@ class LineChart extends React.Component {
           height: this.props.height + topMargin,
           justifyContent: 'flex-end',
           opacity: this.props.notPaddingLeft ? 1: index === 0 ? 0 : 1
+
         }}
       >
         <View
@@ -160,7 +161,7 @@ class LineChart extends React.Component {
             {
               width: dx,
               height: height,
-              marginTop: topMargin,
+              marginTop: topMargin
             },
             styles.coordinateWrapper
           ])}
@@ -288,7 +289,6 @@ class LineChart extends React.Component {
             this.setState({ selectedIndex: index, showGoalMsg: false })
           }}
         >
-
           <View
             style={StyleSheet.flatten([
               styles.pointWrapper,
