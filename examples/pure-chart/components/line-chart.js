@@ -1,740 +1,724 @@
-import React from 'react'
+import React, { Component } from 'react'
+import { Dimensions, Platform, Text, View } from 'react-native'
+import { connect } from 'react-redux'
+import { Container, Content } from 'native-base'
+import FooterScreen from '../Components/Setting/FooterScreen'
+import HeaderScreen from '../Components/Setting/HeaderScreen'
+import colors from '../Themes/Colors'
+import PureChart from 'react-native-pure-chart'
+import I18n from '../I18n'
+import RowSelectFromDayToDay from '../Components/Setting/RowSelectFromDayToDay'
+import RowButtonAction from '../Components/Setting/RowButtonAction'
+import CustomAPI from '../Services/CustomAPI'
 import {
-  View,
-  TouchableWithoutFeedback,
-  Text,
-  Animated,
-  Easing,
-  ScrollView,
-  StyleSheet,
-  Dimensions
-} from 'react-native'
+  API_SHOW_INTERMITTENT,
+  DEVICE,
+  MILI_SECOND_ONE_DAY,
+  SELECT_WEEK_MONTH,
+  TIME_END_DAY,
+  TIME_START_DAY,
+  TYPE
+} from '../Lib/constant'
 import {
-  initData,
-  drawYAxis,
-  drawGuideLine,
-  drawXAxisLabels,
-  drawYAxisLabels,
-  numberWithCommas,
-  drawXAxis,
-  drawYAxisRightLabels,
-  drawYLeftAxisLabels
-} from '../common'
+  backTimeFrom,
+  backTimeTo,
+  checkAuthen3rdParty,
+  convertDateToTime,
+  encodeQueryData,
+  getArrayFromDateToDate,
+  getMaxValue,
+  getMinValue,
+  initDayMonthYearFrom,
+  initDayMonthYearTo,
+  nextTimeFrom,
+  nextTimeTo
+} from '../Lib/common'
+import {
+  preHandlerDataWeightServerRespone,
+  adapterGetWeightFromDayToDay,
+  getDataWeightDateRecentHaveData
+} from '../Lib/HandlerWeight'
+import { getWeightFromAppleHealth } from '../Lib/AppleHealthLib'
+import { getWeightFromGoogleFit } from '../Lib/GoogleFitAppLib'
+import moment from '../Config/CommentConfig'
+import RowSelectWeekMonth from '../Components/Setting/RowSelectWeekMonth'
+import TableDataWeight from '../Components/Weight/TableDataWeight'
+import common from '../Redux/common'
+import Swiper from 'react-native-swiper'
 
-class LineChart extends React.Component {
-  constructor(props) {
+class WeightGraphScreen extends Component {
+  constructor (props) {
     super(props)
-    let newState = initData(
-      this.props.data,
-      this.props.height,
-      this.props.gap,
-      this.props.numberOfYAxisGuideLine,
-      this.props.minY,
-      this.props.maxY,
-      this.props.lastCompletedGoalDateIndex
-    )
     this.state = {
-      loading: false,
-      sortedData: newState.sortedData,
-      selectedIndex: null,
-      nowHeight: 200,
-      nowWidth: 200,
-      scrollPosition: 0,
-      nowX: 0,
-      nowY: 0,
-      max: newState.max,
-      minY: this.props.minY,
-      maxY: this.props.maxY,
-      fadeAnim: new Animated.Value(0),
-      guideArray: newState.guideArray,
-      showRightLablelCol: this.props.showRightLablelCol,
-      showGoalMsg: true,
+      heightWidow: Platform.OS === 'ios' ? Dimensions.get('window').height : (Dimensions.get('window').height - 60),
+      initDayMonthYearFrom: null,
+      initDayMonthYearTo: null,
+      selectWeekMonth: SELECT_WEEK_MONTH.week,
+      arrDataReality: [
+        { x: moment().format('YYYY-MM-DD'), y: 0 }
+      ],
+      arrDataGoal: [
+        { x: moment().format('YYYY-MM-DD'), y: 0 }
+      ],
+      arrDataTable: [],
+      stepGoal: 0,
+      weightCurrentDate: 0,
+      maxY: -1,
+      minY: -1,
+      lastIsBlank: true
     }
 
-    this.drawCoordinates = this.drawCoordinates.bind(this)
-    this.drawCoordinate = this.drawCoordinate.bind(this)
-    this.drawSelected = this.drawSelected.bind(this)
+    // handler when rorate
+    Dimensions.addEventListener('change', () => {
+      this.setState({
+        heightWidow: Platform.OS === 'ios' ? Dimensions.get('window').height : (Dimensions.get('window').height - 60)
+      })
+    })
   }
 
-  shouldComponentUpdate(nextProps, nextState) {
-    if (
-      nextState.sortedData !== this.state.sortedData ||
-      nextState.selectedIndex !== this.state.selectedIndex ||
-      nextState.scrollPosition !== this.state.scrollPosition
+  componentWillMount () {
+    let dateMarker = moment().format('YYYY-MM-DD')
+    let typeSelect = this.state.selectWeekMonth
+
+    if (this.props.navigation &&
+      this.props.navigation.state &&
+      this.props.navigation.state.params &&
+      this.props.navigation.state.params.dateParam
     ) {
-      return true
+      dateMarker = this.props.navigation.state.params.dateParam
+    }
+
+    if (this.props.navigation &&
+      this.props.navigation.state &&
+      this.props.navigation.state.params &&
+      this.props.navigation.state.params.typeSelect
+    ) {
+      typeSelect = this.props.navigation.state.params.typeSelect
+    }
+
+    let objDayMonthYearFrom = initDayMonthYearFrom(dateMarker, typeSelect)
+    let objDayMonthYearTo = initDayMonthYearTo(dateMarker, typeSelect)
+    this.loadData(objDayMonthYearFrom, objDayMonthYearTo, typeSelect)
+  }
+
+  adapterGetWeightFromApp (date = moment().format('YYYY-MM-DD')) {
+    if (!checkAuthen3rdParty(this.props.userInfo)) {
+      return new Promise((resolve, reject) => {
+        reject()
+      })
+    }
+    if (Platform.OS === 'ios') {
+      return getWeightFromAppleHealth(date)
     } else {
-      return false
+      return getWeightFromGoogleFit(date)
     }
   }
 
-  componentDidMount() {
-    Animated.timing(this.state.fadeAnim, {
-      toValue: 1,
-      easing: Easing.bounce,
-      duration: 1000,
-      useNativeDriver: true
-    }).start()
-  }
+  async loadData (objDayMonthYearFrom, objDayMonthYearTo, typeSelect = SELECT_WEEK_MONTH.week) {
+    this.props.setLoading(true)
+    if (moment(objDayMonthYearTo.valueDateTo).format('YY-MM-DD') < moment().format('YY-MM-DD')) {
+      this.setState({
+        lastIsBlank: false
+      })
+    }
+    let startDate = moment(objDayMonthYearFrom.valueDateFrom).subtract(1, 'days')
+    let stopDate = moment(objDayMonthYearTo.valueDateTo)
+    let weightCurrentDate = this.state.weightCurrentDate
+    let objParam = {
+      fromTime: startDate.format('YYYY-MM-DD') + TIME_START_DAY,
+      toTime: stopDate.format('YYYY-MM-DD') + TIME_END_DAY,
+      device: DEVICE.all,
+      type: TYPE.weight,
+      limit: 100
+    }
 
-  componentWillReceiveProps(nextProps) {
-    if (nextProps.data !== this.props.data) {
-      this.setState(
-        Object.assign(
-          {
-            fadeAnim: new Animated.Value(0)
-          },
-          initData(
-            nextProps.data,
-            this.props.height,
-            this.props.gap,
-            this.props.numberOfYAxisGuideLine,
-            nextProps.minY,
-            nextProps.maxY,
-            nextProps.lastCompletedGoalDateIndex
-          )
-        ),
-        () => {
-          Animated.timing(this.state.fadeAnim, {
-            toValue: 1,
-            easing: Easing.bounce,
-            duration: 1000,
-            useNativeDriver: true
-          }).start()
+    let arrDataFromApp = []
+    await adapterGetWeightFromDayToDay(moment(startDate).format('YYYY-MM-DD'), moment(stopDate).format('YYYY-MM-DD'))
+      .then((res) => {
+        if (res && res.length > 0) {
+          for (let i = 0; i < res.length; i++) {
+            let tempValue = {
+              time: res[i].startDate,
+              value: Platform.OS === 'ios' ? res[i].value / 1000 : res[i].value
+            }
+            arrDataFromApp.push(tempValue)
+          }
         }
-      )
+      })
+      .catch((error) => {
+        arrDataFromApp = []
+      })
+
+    let urlWeightReality = API_SHOW_INTERMITTENT + '?' + encodeQueryData(objParam)
+    let promiseWeightReality = CustomAPI.create(urlWeightReality).getData()
+
+    let objParamGoal = {
+      'type': TYPE.goal,
+      'device': DEVICE.all,
+      'limit': 1
     }
-  }
+    let urlGoal = API_SHOW_INTERMITTENT + '?' + encodeQueryData(objParamGoal)
+    let promiseGoal = CustomAPI.create(urlGoal).getData()
+    let arrFromDateToDate = getArrayFromDateToDate(startDate, stopDate)
 
-  getTransform(rad, width) {
-    let x = (0 - width / 2) * Math.cos(rad) - (0 - width / 2) * Math.sin(rad)
-    let y = (0 - width / 2) * Math.sin(rad) + (0 - width / 2) * Math.cos(rad)
+    let weightDateRecentestHaveData = null
+    let hasData = false
+    await getDataWeightDateRecentHaveData(moment(objDayMonthYearFrom.valueDateFrom).format('YYYY-MM-DD'))
+      .then((res) => {
+        if (res && res.valueWeight && !isNaN(res.valueWeight)) {
+          weightDateRecentestHaveData = Math.round(parseFloat(res.valueWeight) * 100) / 100
+          hasData = true
+        }
+      })
 
-    return [
-      { translateX: -1 * x - width / 2 },
-      { translateY: -1 * y + width / 2 },
-      { rotate: rad + 'rad' }
-    ]
-  }
+    let arrDataGraph = [{
+      x: '1',
+      y: weightDateRecentestHaveData
+    }]
+    let arrDataTable = []
+    let arrObjGoal = []
+    let weightGoal = 0
+    let oldWeight = 0
+    let month = moment(objDayMonthYearFrom.valueDateFrom).format('MM')
+    Promise.all([promiseWeightReality, promiseGoal])
+      .then(async (res) => {
+        for (let i = 0; i < arrFromDateToDate.length; i++) {
+          try {
+            let timeMoment = moment(arrFromDateToDate[i])
+            let strX
+            if (i === 1 || month !== timeMoment.format('MM')) {
+              strX = timeMoment.format('MM/DD')
+            } else {
+              strX = timeMoment.format('DD')
+            }
 
-  drawCoordinate(
-    index,
-    start,
-    end,
-    backgroundColor,
-    lineStyle,
-    isBlank,
-    lastCoordinate,
-    seriesIndex
-  ) {
-    let key = 'line' + index
-    let dx = end.gap - start.gap
-    let dy = end.ratioY - start.ratioY
-    let size = Math.sqrt(dx * dx + dy * dy)
-    let angleRad = Math.atan2(dy, dx) == 0 ? 0 : -1 * Math.atan2(dy, dx)
-    let height
-    let top
-    let topMargin = 20
-    if (lastCoordinate) {
-      dx = dx / 3
-    }
-    if (start.ratioY > end.ratioY) {
-      height = start.ratioY
-      top = -1 * size
-    } else {
-      height = end.ratioY
-      top = -1 * (size - Math.abs(dy))
-    }
-    backgroundColor = 'rgba(255,255,255,0)'
-    return (
-      <View
-        key={key}
-        style={{
-          height: this.props.height + topMargin,
-          justifyContent: 'flex-end',
-          opacity: this.props.notPaddingLeft ? 1: index === 0 ? 0 : 1
-        }}
-      >
-        <View
-          style={StyleSheet.flatten([
-            {
-              width: dx,
-              height: height,
-              marginTop: topMargin,
-            },
-            styles.coordinateWrapper
-          ])}
-        >
-          <View
-            style={StyleSheet.flatten([
-              {
-                top: top,
-                width: size,
-                height: size,
-                borderColor: isBlank
-                  ? backgroundColor
-                  : this.props.primaryColor,
-                borderTopWidth: 3,
-                transform: this.getTransform(angleRad, size)
-              },
-              styles.lineBox,
-              lineStyle
-            ])}
-          />
-          <View
-            style={StyleSheet.flatten([
-              styles.absolute,
-              {
-                height: height - Math.abs(dy) - 2,
-                backgroundColor: lastCoordinate
-                  ? 'rgba(255,255,255,0)'
-                  : backgroundColor,
-                marginTop: Math.abs(dy) + 2
-              }
-            ])}
-          />
-        </View>
-        {!lastCoordinate && seriesIndex === 0 ? (
-          <View
-            style={StyleSheet.flatten([
-              styles.guideLine,
-              {
-                width: dx,
-                borderRightColor: this.props.xAxisGridLineColor
-              }
-            ])}
-          />
-        ) : null}
-        {seriesIndex === this.state.sortedData.length - 1 && (
-          <TouchableWithoutFeedback
-            onPress={() => {
-              let selectedIndex = lastCoordinate ? index - 1 : index
+            let tempDataGraph = {
+              x: strX,
+              y: null
+            }
 
-              let emptyCount = 0
-              this.state.sortedData.map(series => {
-                if (series.data[selectedIndex].isEmpty) emptyCount++
-              })
-              if (emptyCount === this.state.sortedData.length) {
-                return null
+            let tempY = null
+
+            let tempDataTable = {
+              date: arrFromDateToDate[i],
+              weight: 0,
+              durationWeight: 0
+            }
+
+            let strDate = moment(arrFromDateToDate[i]).format('YYYY-MM-DD')
+            let arrDetailDataTable = []
+            arrDetailDataTable[strDate] = []
+
+            if (res[0] &&
+              res[0].data &&
+              res[0].data.weight &&
+              res[0].data.weight.record
+            ) {
+              let preHandlerData = preHandlerDataWeightServerRespone(res[0].data.weight.record)
+              let arrKeyDate = Object.keys(preHandlerData)
+              let arrValueDate = Object.values(preHandlerData)
+              if (arrKeyDate.indexOf(arrFromDateToDate[i]) >= 0) {
+                tempY = Math.round(arrValueDate[arrKeyDate.indexOf(arrFromDateToDate[i])].value * 100) / 100
               }
 
-              this.setState(
-                {
-                  selectedIndex: selectedIndex,
-                  showGoalMsg: false
-                },
-                () => {
-                  if (typeof this.props.onPress === 'function') {
-                    this.props.onPress(selectedIndex)
+              // data detail from app
+              let valueApp = '-'
+              let timeApp = '--:--'
+              for (let j = 0; j < arrDataFromApp.length; j++) {
+                if (arrDataFromApp[j].time && arrFromDateToDate[i] === moment(arrDataFromApp[j].time).format('YYYY-MM-DD')) {
+                  let detailDataTable = {}
+                  detailDataTable.data_from_app = {}
+                  valueApp = parseFloat(arrDataFromApp[j].value).toFixed(2)
+                  timeApp = moment(arrDataFromApp[j].time).format('HH:mm')
+                  detailDataTable.data_from_app.value = valueApp
+                  detailDataTable.data_from_app.time_hour = timeApp
+                  arrDetailDataTable[strDate].push(detailDataTable)
+                }
+              }
+
+              if (!tempY && valueApp !== '-') {
+                tempY = valueApp
+              }
+
+              if (tempY) {
+                hasData = true
+                tempDataGraph.y = Math.round(tempY * 100) / 100
+                tempDataTable.weight = Math.round(tempY * 100) / 100
+                tempDataTable.durationWeight = Math.round((tempY - oldWeight) * 100) / 100
+                oldWeight = tempY
+              } else {
+                tempDataTable.weight = Math.round(0 * 100) / 100
+                tempDataTable.durationWeight = Math.round((0 - oldWeight) * 100) / 100
+                oldWeight = 0
+              }
+
+              // data detail from cloud
+              let arrKeyDataRes = Object.keys(res[0].data.weight.record)
+              let arrValueDataRes = Object.values(res[0].data.weight.record)
+              for (let j = 0; j < arrKeyDataRes.length; j++) {
+                if (moment(arrKeyDataRes[j]).format('YYYY-MM-DD') === arrFromDateToDate[i]) {
+                  if (arrValueDataRes[j] && arrValueDataRes[j].self && arrValueDataRes[j].self.value) {
+                    let detailDataTable = {}
+                    detailDataTable.self = {}
+                    detailDataTable.self.value = arrValueDataRes[j].self.value
+                    detailDataTable.self.time_hour = moment(arrKeyDataRes[j]).format('HH:mm')
+                    arrDetailDataTable[strDate].push(detailDataTable)
+                  }
+
+                  if (arrValueDataRes[j] && arrValueDataRes[j].tanita && arrValueDataRes[j].tanita.value) {
+                    let detailDataTable = {}
+                    detailDataTable.tanita = {}
+                    detailDataTable.tanita.value = arrValueDataRes[j].tanita.value
+                    detailDataTable.tanita.time_hour = moment(arrKeyDataRes[j]).format('HH:mm')
+                    arrDetailDataTable[strDate].push(detailDataTable)
+                  }
+
+                  if (arrValueDataRes[j] && arrValueDataRes[j].withings && arrValueDataRes[j].withings.value) {
+                    let detailDataTable = {}
+                    detailDataTable.withings = {}
+                    detailDataTable.withings.value = arrValueDataRes[j].withings.value
+                    detailDataTable.withings.time_hour = moment(arrKeyDataRes[j]).format('HH:mm')
+                    arrDetailDataTable[strDate].push(detailDataTable)
                   }
                 }
-              )
-            }}
-          >
-            <View
-              style={{
-                width: dx,
-                height: '100%',
-                position: 'absolute',
-                marginLeft: (-1 * dx) / 2,
-                backgroundColor: 'rgba(255,255,255,0)'
-              }}
-            />
-          </TouchableWithoutFeedback>
-        )}
-      </View>
-    )
-  }
-
-  drawPoint(index, point, seriesColor, isTarget = false) {
-    let key = 'point' + index
-    let size = 18
-    let color = !seriesColor ? this.props.primaryColor : seriesColor
-    if (this.state.selectedIndex === index) {
-      color = this.props.selectedColor
-    }
-
-    if (point.isEmpty || this.props.hidePoints) return null
-    if (isTarget) {
-      return (
-        <TouchableWithoutFeedback
-          key={key}
-          onPress={() => {
-            this.setState({ selectedIndex: index, showGoalMsg: false })
-          }}
-        >
-          <View
-            style={StyleSheet.flatten([
-              styles.pointWrapperTarget,
-              {
-                width: 18,
-                height: 3,
-
-                left: point.gap - size / 2,
-                bottom: point.ratioY - size / 2 + 6,
-
-                borderColor: color,
-                backgroundColor: color
               }
-            ])}
-          />
-        </TouchableWithoutFeedback>
-      )
-    } else {
-      return (
-        <TouchableWithoutFeedback
-          key={key}
-          onPress={() => {
-            this.setState({ selectedIndex: index, showGoalMsg: false })
-          }}
-        >
-
-          <View
-            style={StyleSheet.flatten([
-              styles.pointWrapper,
-              {
-                width: size,
-                height: size,
-
-                left: point.gap - size / 2,
-                bottom: point.ratioY - size / 2,
-
-                borderColor: color,
-                backgroundColor: color
+              tempDataTable.detailDataTable = arrDetailDataTable[strDate]
+            } else {
+              let valueApp = '-'
+              let timeApp = '--:--'
+              for (let j = 0; j < arrDataFromApp.length; j++) {
+                if (arrFromDateToDate[i] === moment(arrDataFromApp[j].time).format('YYYY-MM-DD')) {
+                  let detailDataTable = {}
+                  detailDataTable.data_from_app = {}
+                  valueApp = arrDataFromApp[i].value
+                  timeApp = moment(arrDataFromApp[i].time).format('HH:mm')
+                  detailDataTable.data_from_app.value = valueApp
+                  detailDataTable.data_from_app.time_hour = timeApp
+                  arrDetailDataTable[strDate].push(detailDataTable)
+                }
               }
-            ])}
-          />
-        </TouchableWithoutFeedback>
-      )
-    }
-  }
-  drawValue(index, point) {
-    let key = 'pointvalue' + index
-    let size = 200
-    return (
-      <View
-        key={key}
-        style={{
-          position: 'absolute',
-          left: index === 0 ? point.gap : point.gap - size / 2,
-          bottom: point.ratioY + 10,
-          backgroundColor: 'transparent',
-          width: index !== 0 ? 200 : undefined
-        }}
-      >
-        {this.drawCustomValue(index, point)}
-      </View>
-    )
-  }
 
-  drawCustomValue(index, point) {
-    if (this.props.customValueRenderer) {
-      return this.props.customValueRenderer(index, point)
-    } else {
-      return null
-    }
-  }
-  drawCoordinates(
-    data,
-    seriesColor,
-    seriesIndex,
-    isTarget = false,
-    lastIsBlank = false
-  ) {
-    let result = []
-    let lineStyle = {
-      borderColor: !seriesColor ? this.props.primaryColor : seriesColor
-      //borderColor: "blue"
-    }
-    let dataLength = data.length
-    for (let i = 0; i < dataLength - 1; i++) {
-      let styleDetail = {
-        borderColor:
-          data[i] && data[i].color ? data[i].color : lineStyle.borderColor
-      }
-      if (
-        (data[i] && data[i].color && data[i].color == 'rgba(255,255,255,0)') ||
-        (data[i + 1] &&
-          data[i + 1].color &&
-          data[i + 1].color == 'rgba(255,255,255,0)')
-      ) {
-        styleDetail = {
-          borderColor: 'rgba(255,255,255,0)'
-        }
-      }
-      result.push(
-        this.drawCoordinate(
-          i,
-          data[i],
-          data[i + 1],
-          'rgba(255,255,255,0)',
-          styleDetail,
-          false,
-          false,
-          seriesIndex
-        )
-      )
-    }
-
-    if (dataLength > 0) {
-      //result.push(this.drawPoint(0, data[0], seriesColor, isTarget))
-      result.push(this.drawValue(0, data[0], seriesColor))
-    }
-
-    for (let i = 0; i < dataLength - 1; i++) {
-      result.push(this.drawPoint(i + 1, data[i + 1], seriesColor, isTarget))
-      result.push(this.drawValue(i + 1, data[i + 1], seriesColor))
-    }
-
-    let lastData = Object.assign({}, data[dataLength - 1])
-    let lastCoordinate = Object.assign({}, data[dataLength - 1])
-    lastCoordinate.gap = lastCoordinate.gap + this.props.gap
-    let customStyle = {
-      borderColor:
-        data[0] && data[0].color ? data[0].color : lineStyle.borderColor
-    }
-    if (lastIsBlank) {
-      let styleDetail = {}
-
-      if(dataLength == 2, lastData && lastData.color){
-        styleDetail.borderColor = lastData.color
-      }
-
-      result.push(
-        this.drawCoordinate(
-          dataLength,
-          lastData,
-          lastCoordinate,
-          'rgba(255,255,255,0)',
-          styleDetail,
-          true,
-          true,
-          seriesIndex
-        )
-      )
-    } else {
-      result.push(
-        this.drawCoordinate(
-          dataLength,
-          lastData,
-          lastCoordinate,
-          'rgba(255,255,255,0)',
-          customStyle,
-          false,
-          true,
-          seriesIndex
-        )
-      )
-    }
-    return result
-  }
-
-  getDistance(p1, p2) {
-    return Math.sqrt(Math.pow(p1[0] - p2[0], 2) + Math.pow(p1[1] - p2[1], 2))
-  }
-
-  drawSelected(index) {
-    if (this.state.sortedData.length === 0) return null
-    let data = this.state.sortedData[0].data
-    let dataObject = data[index]
-    if (
-      typeof this.state.selectedIndex === 'number' &&
-      this.state.selectedIndex >= 0
-    ) {
-      if (!dataObject) {
-        return null
-      }
-      let reverse = true
-      let bottom = dataObject.ratioY
-
-      let left = dataObject.gap
-      let gap = 0
-      if (index === data.length - 1 && index !== 0) {
-        left = data[index - 1].gap
-        gap = dataObject.gap - left
-      }
-      if (bottom > (this.props.height * 2) / 3) {
-        reverse = false
-      }
-      const maxY = this.props.maxY
-      const realValue = this.props.data[1].data[index].y
-      let marginTop = null
-      if (this.props.maxY && this.props.maxY !== 0) {
-        const diff = 1 - realValue / (maxY-1)
-        marginTop = diff * this.props.height
-        if (diff !== 0) marginTop = marginTop - 50
-      }
-      return (
-        <View
-          style={StyleSheet.flatten([
-            styles.selectedWrapper,
-            {
-              left: left
+              if (valueApp !== '-') {
+                hasData = true
+                tempDataGraph.y = Math.round(valueApp * 100) / 100
+                tempDataTable.weight = Math.round((valueApp - oldWeight) * 100) / 100
+                tempDataTable.durationWeight = Math.round(valueApp * 100) / 100
+                oldWeight = valueApp
+              } else {
+                tempDataTable.weight = Math.round((0 - oldWeight) * 100) / 100
+                tempDataTable.durationWeight = Math.round(0 * 100) / 100
+                oldWeight = 0
+              }
+              tempDataTable.detailDataTable = arrDetailDataTable[strDate]
             }
-          ])}
-        >
-          <View
-            style={StyleSheet.flatten([
-              styles.selectedLine,
-              {
-                backgroundColor: this.props.selectedColor,
-                marginLeft: gap
+
+            if (i > 0) {
+              if (arrFromDateToDate[i] === moment().format('YYYY-MM-DD')) {
+                weightCurrentDate = tempDataGraph.y
               }
-            ])}
-          />
-          <View
-            style={StyleSheet.flatten([
-              styles.selectedBox,
-              marginTop ? { marginTop } : null
-            ])}
-          >
-            {this.state.showGoalMsg === true && this.props.lastCompletedGoalDateIndex &&
-            this.props.lastCompletedGoalDateIndex === index ? (
-              <View>
-                <Text style={styles.tooltipTitle}>よく頑張りました</Text>
-                <Text style={styles.tooltipValue}>
-                  {this.props.completedGoalValue}数
-                </Text>
-              </View>
-            ) : (
-              <View>
-                {this.state.sortedData.map(series => {
-                  let dataObject = series.data[this.state.selectedIndex]
-                  return (
-                    <View key={series.seriesName}>
-                      {dataObject.x ? (
-                        <Text style={styles.tooltipTitle}>
-                          {series.seriesLabel
-                            ? series.seriesLabel
-                            : dataObject.x}
-                        </Text>
-                      ) : null}
-                      <View
-                        style={{
-                          flexDirection: 'row',
-                          paddingLeft: 5,
-                          alignItems: 'center'
-                        }}
-                      >
-                        <View
-                          style={{
-                            width: 10,
-                            height: 5,
-                            marginRight: 3,
-                            borderRadius: 2,
-                            backgroundColor: !series.seriesColor
-                              ? this.props.primaryColor
-                              : series.seriesColor
-                          }}
-                        />
-                        <Text style={styles.tooltipValue}>
-                          {numberWithCommas(dataObject.y, false)}
-                        </Text>
-                      </View>
-                    </View>
-                  )
-                })}
-              </View>
-            )}
-          </View>
-        </View>
-      )
-    } else {
-      return null
-    }
-  }
-
-  render() {
-    let { fadeAnim } = this.state
-    let marginRight = 10
-    if (this.state.showRightLablelCol) {
-      marginRight = 0
-    }
-    return this.state.sortedData.length > 0 ? (
-      <View
-        style={StyleSheet.flatten([
-          styles.wrapper,
-          {
-            backgroundColor: 'transparent'
+              arrDataGraph.push(tempDataGraph)
+              arrDataTable.push(tempDataTable)
+            }
+          } catch (error) {
+            console.log('error 12345678', error)
           }
-        ])}
+        }
+
+        if (res[1] && res[1].status === 200 && res[1].data && res[1].data.goal && res[1].data.goal.record) {
+          arrObjGoal = await this.initValueLineGoal(res[1].data.goal.record, objDayMonthYearFrom, objDayMonthYearTo)
+        } else {
+          let startDateMoment = moment(objDayMonthYearFrom.valueDateFrom)
+          let month = parseInt(startDateMoment.format('MM'))
+          for (let i = 0; i < 7; i++) {
+            let currentMonth = parseInt(startDateMoment.format('MM'))
+            let strX
+            if (i === 0 || month !== currentMonth) {
+              strX = startDateMoment.format('MM/DD')
+            } else {
+              strX = startDateMoment.format('DD')
+            }
+            let tempObjDataGraph = {
+              x: strX,
+              y: null
+            }
+            arrObjGoal.push(tempObjDataGraph)
+            startDateMoment.add(1, 'days')
+          }
+        }
+        let dataArrays = []
+        if (arrDataGraph.length > 0 && hasData) {
+          dataArrays.push({
+            seriesName: 'step reality',
+            data: arrDataGraph,
+            color: 'pink'
+          })
+        }
+        if (arrObjGoal.length > 0) {
+          dataArrays.push({
+            seriesName: 'step goal',
+            data: arrObjGoal,
+            color: 'transparent'
+          })
+        }
+        let maxValue = getMaxValue(dataArrays)
+        let minValue = getMinValue(dataArrays)
+        if (maxValue === minValue) {
+          maxValue++
+          minValue = 0
+        }
+        if (!hasData) {
+          minValue = 0
+        }
+        let minY = 1.3 * minValue - 0.3 * maxValue > 0 ? 1.3 * minValue - 0.3 * maxValue : 0
+        let maxY = 1.3 * maxValue - 0.3 * minValue
+        // khi tuần trước đó không có data thì phải ẩn đường thẳng đi
+        this.indexDisplay = -1
+        if(!this.isLastWeekHaveData) {
+          const index = arrDataTable.findIndex((item) => item.weight !== 0);
+          this.indexDisplay = index;
+        }
+        this.setState({
+          initDayMonthYearFrom: objDayMonthYearFrom,
+          initDayMonthYearTo: objDayMonthYearTo,
+          arrDataReality: arrDataGraph.length ? arrDataGraph : this.state.arrDataReality,
+          arrDataGoal: arrObjGoal.length ? arrObjGoal : arrObjGoal,
+          arrDataTable: arrDataTable,
+          selectWeekMonth: typeSelect,
+          weightGoal: weightGoal,
+          weightCurrentDate: weightCurrentDate,
+          minY: minY,
+          maxY: maxY
+        })
+        this.props.setLoading(false)
+      })
+      .catch((error) => {
+        this.setState({
+          initDayMonthYearFrom: objDayMonthYearFrom,
+          initDayMonthYearTo: objDayMonthYearTo,
+          arrDataReality: arrDataGraph.length ? arrDataGraph : this.state.arrDataReality,
+          arrDataGoal: arrObjGoal.length ? arrObjGoal : arrObjGoal,
+          arrDataTable: arrDataTable,
+          selectWeekMonth: typeSelect,
+          weightGoal: weightGoal,
+          weightCurrentDate: weightCurrentDate
+        })
+        this.props.setLoading(false)
+      })
+  }
+  checkHavaDateTimeAgo = async (dateString) => {
+    const yesterday = moment(dateString, "DD/MM/YYYY").add(-1, 'days');
+    const value = await getDataWeightDateRecentHaveData(yesterday.toLocaleString());
+    if(value.valueWeight) return true;
+    return false
+    
+  }
+  initValueLineGoal  = async (goal = null, objDayMonthYearFrom, objDayMonthYearTo) => {
+    this.isLastWeekHaveData = await this.checkHavaDateTimeAgo(objDayMonthYearFrom.valueDateFrom);
+    let startDateMoment = moment(moment(objDayMonthYearFrom.valueDateFrom).subtract('1', 'days').format('YYYY-MM-DD'), 'YYYY-MM-DD')
+    let endDateMoment = moment(moment(objDayMonthYearTo.valueDateTo).format('YYYY-MM-DD'), 'YYYY-MM-DD')
+    let totalDay = endDateMoment.diff(startDateMoment, 'days', true)
+    totalDay = Math.round(totalDay)
+    if (totalDay < 8) {
+      totalDay = 8
+    } else {
+      totalDay++
+    }
+    let arrValueDate = Object.values(goal)
+    let arrDataGoal = []
+    let timeWeightStartDate
+    let timeWeightEndDate
+    let durationEachDay
+    let startDateGoalMoment
+    let endDateGoalMoment
+    if (arrValueDate[0] &&
+      arrValueDate[0].self &&
+      arrValueDate[0].self.value
+    ) {
+      let objGoal = JSON.parse(arrValueDate[0].self.value)
+      if (objGoal.weight.startdate && objGoal.weight.enddate && objGoal.weight.goal) {
+        let weightStartDate = objGoal.weight.startdate
+        let weightEndDate = objGoal.weight.enddate
+        startDateGoalMoment = moment(weightStartDate, 'YYYY-MM-DD')
+        endDateGoalMoment = moment(weightEndDate, 'YYYY-MM-DD')
+        timeWeightStartDate = convertDateToTime(weightStartDate)
+        timeWeightEndDate = convertDateToTime(weightEndDate)
+
+        let totalDayStartEnd = (timeWeightEndDate - timeWeightStartDate) / MILI_SECOND_ONE_DAY
+        durationEachDay = (objGoal.weight.goal - objGoal.weight.current) / totalDayStartEnd
+        durationEachDay = Math.round(durationEachDay * 100) / 100
+      }
+    }
+    let month = null
+    for (let i = 0; i < totalDay; i++) {
+      let currentMonth = parseInt(startDateMoment.format('MM'))
+      let strX
+      if (i === 1) {
+        month = parseInt(startDateMoment.format('MM'))
+      }
+      if (i === 1 || month !== currentMonth) {
+        strX = startDateMoment.format('MM/DD')
+      } else {
+        strX = startDateMoment.format('DD')
+      }
+      let tempObjDataGraph = {
+        x: strX,
+        y: null
+      }
+
+      if (arrValueDate[0] && arrValueDate[0].self && arrValueDate[0].self.value) {
+        let objGoal = JSON.parse(arrValueDate[0].self.value)
+        let strY = 0
+        if (!objGoal.weight.startdate && !objGoal.weight.enddate && objGoal.weight.goal) {
+          strY = objGoal.weight.goal
+          tempObjDataGraph.color = 'blue'
+        } else {
+          if (startDateMoment < objGoal.weight.startdate || startDateMoment > objGoal.weight.enddate) {
+            tempObjDataGraph.color = 'rgba(255,255,255,0)'
+            tempObjDataGraph.y = null
+          } else {
+            let totalDay = ((startDateMoment.format('x') - timeWeightStartDate) / MILI_SECOND_ONE_DAY)
+            if (i === 0) {
+              strY = parseFloat(objGoal.weight.current) + parseFloat(totalDay * durationEachDay) + parseFloat(2 * durationEachDay / 3)
+            } else {
+              strY = parseFloat(objGoal.weight.current) + parseFloat(totalDay * durationEachDay)
+            }
+            tempObjDataGraph.color = 'blue'
+            tempObjDataGraph.y = Math.round(strY * 100) / 100
+          }
+        }
+      } else {
+        tempObjDataGraph.y = 0
+      }
+      if (startDateGoalMoment > startDateMoment || startDateMoment > endDateGoalMoment) {
+        tempObjDataGraph.color = 'rgba(255,255,255,0)'
+      }
+      arrDataGoal.push(tempObjDataGraph)
+      startDateMoment.add(1, 'days')
+    }
+    return arrDataGoal
+  }
+
+  goToSettingWeightInDay () {
+    this.props.navigation.navigate('SettingWeightInDayScreen', {
+      dateParam: moment().format('YYYY-MM-DD'),
+      weightParam: this.state.weightCurrentDate,
+      typeSelect: this.state.selectWeekMonth
+    })
+  }
+
+  goToWeightGraph () {
+    this.props.navigation.navigate('WeightGraphScreen')
+  }
+
+  selectWeek () {
+    let dateMarker = moment().format('YYYY-MM-DD')
+    let objDayMonthYearFrom = initDayMonthYearFrom(dateMarker, SELECT_WEEK_MONTH.week)
+    let objDayMonthYearTo = initDayMonthYearTo(dateMarker, SELECT_WEEK_MONTH.week)
+    this.loadData(objDayMonthYearFrom, objDayMonthYearTo, SELECT_WEEK_MONTH.week)
+  }
+
+  selectMonth () {
+    let dateMarker = moment().format('YYYY-MM-DD')
+    let objDayMonthYearFrom = initDayMonthYearFrom(dateMarker, SELECT_WEEK_MONTH.month)
+    let objDayMonthYearTo = initDayMonthYearTo(dateMarker, SELECT_WEEK_MONTH.month)
+    this.loadData(objDayMonthYearFrom, objDayMonthYearTo, SELECT_WEEK_MONTH.month)
+  }
+
+  backTime () {
+    let dateMarker = this.state.initDayMonthYearTo.valueDateTo
+
+    let objDayFrom = backTimeFrom(dateMarker, this.state.selectWeekMonth)
+    let objDayTo = backTimeTo(dateMarker, this.state.selectWeekMonth)
+
+    this.loadData(objDayFrom, objDayTo, this.state.selectWeekMonth)
+  }
+
+  nextTime () {
+    let dateMarker = this.state.initDayMonthYearTo.valueDateTo
+    let objDayFrom = nextTimeFrom(dateMarker, this.state.selectWeekMonth)
+    let objDayTo = nextTimeTo(dateMarker, this.state.selectWeekMonth)
+    this.loadData(objDayFrom, objDayTo, this.state.selectWeekMonth)
+  }
+
+  goBack () {
+    this.props.navigation.navigate('HomeScreen')
+  }
+
+  selectFromDayToDay (dateFrom = new Date(), dateTo = new Date()) {
+    let objDayMonthYearFrom = {
+      valueDateFrom: dateFrom,
+      strDateFrom: moment(dateFrom).format('LL')
+    }
+
+    let objDayMonthYearTo = {
+      valueDateTo: dateTo,
+      strDateTo: moment(dateTo).format('LL')
+    }
+    this.loadData(objDayMonthYearFrom, objDayMonthYearTo)
+  }
+
+  pageFlick (index) {
+    if (index != 1) {
+      if (index == 0) {
+        this.backTime()
+      } else if (index == 2) {
+        this.nextTime()
+      }
+      this.refs.swiperRef.scrollBy(0, false)
+
+    }
+  }
+
+  render () {
+    let sampleData = []
+    if (this.state.arrDataGoal.length > 0) {
+      sampleData.push({
+        seriesName: 'step goal',
+        data: this.state.arrDataGoal,
+        color: 'transparent',
+        seriesLabel: '目標体重'
+      })
+    }
+    if (this.state.arrDataReality.length > 0) {
+      sampleData.push({
+        seriesName: 'step reality',
+        data: this.state.arrDataReality,
+        color: 'pink',
+        seriesLabel: '体重',
+        lastIsBlank: this.state.lastIsBlank
+      })
+    }
+    return (
+      <Swiper
+        ref="swiperRef"
+        showsButtons={true}
+        loop={false}
+        onIndexChanged={(index) => {this.pageFlick(index)}}
+        index={1}
+        showsButtons={false}
+        showsPagination={false}
       >
-        <View style={styles.yAxisLabelsWrapper}>
-          {drawYAxisLabels(
-            this.state.guideArray,
-            this.props.height + 20,
-            this.props.minValue,
-            this.props.labelColor
-          )}
+        {/* first swiper */}
+        <View style={{
+          minHeight: this.state.heightWidow,
+          backgroundColor: '#1BC247'
+        }}>
+          <HeaderScreen
+            onPressProps={this.goBack.bind(this)}
+            textContent={I18n.t('weight_graph.title_screen')}
+            navigation={this.props.navigation}
+          />
         </View>
 
-        <View
-          style={{
-            flex: 1,
-            marginRight: marginRight
-          }}
-        >
-          <ScrollView
-            horizontal
-            style={{
-              flex: 1
-            }}
-          >
-            <View
-              style={{
-                flex: 1
-              }}
-            >
-              <View ref="chartView" style={styles.chartViewWrapper}>
-                {drawYAxis(this.props.yAxisColor)}
-                {drawGuideLine(
-                  this.state.guideArray,
-                  this.props.yAxisGridLineColor
-                )}
-                {this.state.sortedData.map((obj, index) => {
-                  return (
-                    <Animated.View
-                      key={'animated_' + index}
-                      style={{
-                        transform: [{ scaleY: fadeAnim }],
-                        flexDirection: 'row',
-                        alignItems: 'flex-end',
-                        height: '100%',
-                        position: index === 0 ? 'relative' : 'absolute',
-                        minWidth: 200,
-                        marginBottom:
-                          this.props.minValue &&
-                          this.state.guideArray &&
-                          this.state.guideArray.length > 0
-                            ? -1 *
-                              this.state.guideArray[0][2] *
-                              this.props.minValue
-                            : null
-                      }}
-                    >
-                      {this.drawCoordinates(
-                        obj.data,
-                        obj.seriesColor,
-                        index,
-                        obj.isTarget,
-                        obj.lastIsBlank
-                      )}
-                    </Animated.View>
-                  )
-                })}
-                {this.drawSelected(this.state.selectedIndex)}
-              </View>
+        {/* second swiper */}
+        <Container style={{
+          minHeight: this.state.heightWidow
+        }}>
+          <HeaderScreen
+            onPressProps={this.goBack.bind(this)}
+            textContent={I18n.t('weight_graph.title_screen')}
+            navigation={this.props.navigation}
+          />
+          <Content style={{ backgroundColor: '#1BC247' }}>
+            <View style={{
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center'
+            }}>
+              <RowButtonAction
+                goToEdit={this.goToSettingWeightInDay.bind(this)}
+                goToGraph={this.goToWeightGraph.bind(this)}
+                navigation={this.props.navigation}
+              />
 
-              {drawXAxis(this.props.xAxisColor)}
-              {drawXAxisLabels(
-                this.state.sortedData[0].data,
-                this.props.gap,
-                this.props.labelColor,
-                this.props.showEvenNumberXaxisLabel
-              )}
+              <RowSelectFromDayToDay
+                onPressProps={this.selectFromDayToDay.bind(this)}
+                nextTimeProps={this.nextTime.bind(this)}
+                backTimeProps={this.backTime.bind(this)}
+                initDayMonthYearFrom={this.state.initDayMonthYearFrom}
+                initDayMonthYearTo={this.state.initDayMonthYearTo}
+                ref='fromDayToDay'
+              />
+
+              <RowSelectWeekMonth
+                selectMonthProps={this.selectMonth.bind(this)}
+                selectWeekProps={this.selectWeek.bind(this)}
+                typeSelect={this.state.selectWeekMonth}
+              />
             </View>
-          </ScrollView>
-        </View>
 
-        {this.state.showRightLablelCol ? (
-          <View style={styles.yAxisRightLabelsWrapper}>
-            {drawYAxisRightLabels(
-              this.state.guideArray,
-              this.props.height + 20,
-              this.props.minValue,
-              this.props.labelColor
-            )}
-          </View>
-        ) : null}
-      </View>
-    ) : null
+            <View style={{ flex: 1, flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 5 }}>
+              <Text style={{ color: 'white' }}>(kg)</Text>
+            </View>
+            <View style={{
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center'
+            }}>
+              {
+                this.state.arrDataReality.length > 0 &&
+                (
+                  <View style={{
+                    width: '100%',
+                    paddingTop: 20
+                  }}>
+                    <PureChart
+                      data={sampleData}
+                      type='line'
+                      height={300}
+                      xAxisColor={colors.white_font_color}
+                      yAxisColor={'transparent'}
+                      xAxisGridLineColor={'transparent'}
+                      yAxisGridLineColor={colors.white_font_color}
+                      labelColor={colors.white_font_color}
+                      showEvenNumberXaxisLabel={false}
+                      minY={this.state.minY}
+                      maxY={this.state.maxY}
+                      notPaddingLeft
+                      indexDisplay={this.indexDisplay}
+                    />
+                  </View>
+                )
+              }
+
+              <TableDataWeight
+                dataTableProps={this.state.arrDataTable}
+                navigation={this.props.navigation}
+                typeSelect={this.state.selectWeekMonth}
+              />
+            </View>
+          </Content>
+          <FooterScreen
+            navigation={this.props.navigation}
+          />
+        </Container>
+
+        {/* third swiper */}
+        <View style={{
+          minHeight: this.state.heightWidow,
+          backgroundColor: '#1BC247'
+        }}>
+          <HeaderScreen
+            onPressProps={this.goBack.bind(this)}
+            textContent={I18n.t('weight_graph.title_screen')}
+            navigation={this.props.navigation}
+          />
+        </View>
+      </Swiper>
+    )
   }
 }
 
-LineChart.defaultProps = {
-  data: [],
-  primaryColor: '#297AB1',
-  selectedColor: '#FF0000',
-  height: 100,
-  gap: 60,
-  showEvenNumberXaxisLabel: true,
-  onPointClick: point => {},
-  numberOfYAxisGuideLine: 5
+const mapStateToProps = (state) => {
+  return {
+    userInfo: state.userInfo.user_info
+  }
 }
 
-const styles = StyleSheet.create({
-  wrapper: {
-    flexDirection: 'row',
-    overflow: 'hidden',
-    flex: 1,
-    justifyContent: 'space-between'
-  },
-  yAxisLabelsWrapper: {
-    paddingRight: 5
-  },
-  yAxisRightLabelsWrapper: {
-    width: 35,
-    marginLeft: 5
-  },
-  chartViewWrapper: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    margin: 0,
-    paddingRight: 0
-    //overflow: 'hidden',
-  },
-  coordinateWrapper: {
-    overflow: 'hidden',
-    justifyContent: 'flex-start',
-    alignContent: 'flex-start'
-  },
-  lineBox: {
-    overflow: 'hidden',
-    justifyContent: 'flex-start'
-  },
-  guideLine: {
-    position: 'absolute',
-    height: '100%',
-    borderRightColor: '#e0e0e050',
-    borderRightWidth: 1
-  },
-  absolute: {
-    position: 'absolute',
-    width: '100%'
-  },
-  pointWrapper: {
-    position: 'absolute',
-    borderRadius: 10,
-    borderWidth: 1
-  },
-  pointWrapperTarget: {
-    position: 'absolute',
-    borderRadius: 0,
-    borderWidth: 1
-  },
-  selectedWrapper: {
-    position: 'absolute',
-    height: '100%',
-    alignItems: 'flex-start'
-  },
-  selectedLine: {
-    position: 'absolute',
-    width: 1,
-    height: '100%'
-  },
-  selectedBox: {
-    backgroundColor: '#164103',
-    borderRadius: 5,
-    opacity: 0.8,
-    borderColor: '#AAAAAA',
-    borderWidth: 1,
-    position: 'absolute',
-    padding: 3,
-    marginLeft: 10,
-    justifyContent: 'center'
-  },
-  tooltipTitle: { fontSize: 10, color: 'white' },
-  tooltipValue: { fontWeight: 'bold', fontSize: 15, color: 'white' }
-})
+const mapDispatchToProps = (dispatch) => {
+  return {
+    setLoading: (isLoading) => dispatch(common.setLoading(isLoading))
+  }
+}
 
-export default LineChart
+export default connect(mapStateToProps, mapDispatchToProps)(WeightGraphScreen)
