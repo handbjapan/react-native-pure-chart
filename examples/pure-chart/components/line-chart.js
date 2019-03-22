@@ -146,13 +146,15 @@ class LineChart extends React.Component {
       top = -1 * (size - Math.abs(dy))
     }
     backgroundColor = 'rgba(255,255,255,0)'
+    // this.props.indexDisplay // nếu trước đó không có dữ liệu thì sẽ không hiển thị đường lối
+    const isDisplay = (!this.props.notPaddingLeft && index !== 0)|| (this.props.notPaddingLeft && this.props.indexDisplay < index )
     return (
       <View
         key={key}
         style={{
           height: this.props.height + topMargin,
           justifyContent: 'flex-end',
-          opacity: index == 0 ? 0 : 1
+          opacity: isDisplay ? 1 : 0
         }}
       >
         <View
