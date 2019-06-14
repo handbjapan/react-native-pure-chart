@@ -8,6 +8,7 @@ import {
   ScrollView,
   StyleSheet,
   Dimensions
+} from 'react-native'
 import {
   initData,
   drawYAxis,
