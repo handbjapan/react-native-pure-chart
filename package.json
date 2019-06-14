@@ -1,29 +1,29 @@
 {
   "_args": [
     [
-      "git+https://github.com/haposoft/react-native-pure-chart.git",
+      "git+https://github.com/handbjapan/react-native-pure-chart.git",
       "C:\\Users\\tsuji\\Documents\\git\\KARADAYORI"
     ]
   ],
-  "_from": "git+https://github.com/haposoft/react-native-pure-chart.git",
-  "_id": "react-native-pure-chart@git+https://github.com/haposoft/react-native-pure-chart.git#67a568a84045a9392f902b698e4bcb1c2020e0ba",
+  "_from": "git+https://github.com/handbjapan/react-native-pure-chart.git",
+  "_id": "react-native-pure-chart@git+https://github.com/handbjapan/react-native-pure-chart.git",
   "_inBundle": false,
   "_integrity": "",
   "_location": "/react-native-pure-chart",
   "_phantomChildren": {},
   "_requested": {
     "type": "git",
-    "raw": "git+https://github.com/haposoft/react-native-pure-chart.git",
-    "rawSpec": "git+https://github.com/haposoft/react-native-pure-chart.git",
-    "saveSpec": "git+https://github.com/haposoft/react-native-pure-chart.git",
-    "fetchSpec": "https://github.com/haposoft/react-native-pure-chart.git",
+    "raw": "git+https://github.com/handbjapan/react-native-pure-chart.git",
+    "rawSpec": "git+https://github.com/handbjapan/react-native-pure-chart.git",
+    "saveSpec": "git+https://github.com/handbjapan/react-native-pure-chart.git",
+    "fetchSpec": "https://github.com/handbjapan/react-native-pure-chart.git",
     "gitCommittish": null
   },
   "_requiredBy": [
     "/"
   ],
-  "_resolved": "git+https://github.com/haposoft/react-native-pure-chart.git#67a568a84045a9392f902b698e4bcb1c2020e0ba",
-  "_spec": "git+https://github.com/haposoft/react-native-pure-chart.git",
+  "_resolved": "git+https://github.com/handbjapan/react-native-pure-chart.git",
+  "_spec": "git+https://github.com/handbjapan/react-native-pure-chart.git",
   "_where": "C:\\Users\\tsuji\\Documents\\git\\KARADAYORI",
   "author": "",
   "bugs": {
