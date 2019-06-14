@@ -8,7 +8,6 @@ import {
   ScrollView,
   StyleSheet,
   Dimensions
-} from 'react-native'
 import {
   initData,
   drawYAxis,
@@ -255,7 +254,6 @@ class LineChart extends React.Component {
     if (this.state.selectedIndex === index) {
       color = this.props.selectedColor
     }
-
     if (point.isEmpty || this.props.hidePoints) return null
     if (isTarget) {
       return (
@@ -492,9 +490,9 @@ class LineChart extends React.Component {
             {this.state.showGoalMsg === true && this.props.lastCompletedGoalDateIndex &&
             this.props.lastCompletedGoalDateIndex === index ? (
               <View>
-                <Text style={styles.tooltipTitle}>よく頑張りました</Text>
+                <Text style={styles.tooltipTitle}>目標達成</Text>
                 <Text style={styles.tooltipValue}>
-                  {this.props.completedGoalValue}数
+                  {this.props.completedGoalValue}歩
                 </Text>
               </View>
             ) : (

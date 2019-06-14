@@ -125,6 +125,8 @@ export const refineData = (flattenData, max, height, gap, minY, maxY) => {
         simpleTypeCount++
         //dataObject.ratioY = dataProp[i] / maxClone * height
         dataObject.ratioY = (maxY-minY) != 0 ? (dataProp[i]-minY) / (maxY-minY) * height : 0
+        if (dataObject.ratioY<0){dataObject.ratioY=0}
+        if (dataObject.ratioY>height){dataObject.ratioY=height}
         dataObject.y = dataProp[i]
         dataObject = {
           gap: i == 0 ? 0 : ((i * gap) - (gap/3*2)),
@@ -168,10 +170,13 @@ export const refineData = (flattenData, max, height, gap, minY, maxY) => {
         }
         if (typeof dataProp[i].y === 'number' && dataProp[i].x) {
           objectTypeCount++
+          let ratioY = (maxY-minY) != 0 ? (dataProp[i].y-minY) / (maxY-minY) * height : 0
+          if (ratioY<0){ratioY=0}
+          if (ratioY>height){ratioY=height}
           dataObject = {
             gap: i == 0 ? 0 : ((i * gap) - (gap/3*2)),
             //ratioY: dataProp[i].y / maxClone * height,
-            ratioY: (maxY-minY) != 0 ? (dataProp[i].y-minY) / (maxY-minY) * height : 0,
+            ratioY: ratioY,
             x: dataProp[i].x,
             y: dataProp[i].y,
             isEmpty: isEmpty
@@ -206,11 +211,12 @@ export const refineData = (flattenData, max, height, gap, minY, maxY) => {
 
 export const getGuideArray_handb = (max, height, minY,maxY,numberOfPoints = 5) => {
   let arr = []
-  
+  let minunit=(maxY-minY>9999?1000:(maxY-minY>999?100:maxY-minY>99?10:maxY-minY>9?1:0.1))
+
   let dy=(maxY-minY)/(numberOfPoints-1)
   for (let i = 0; i < numberOfPoints; i++) {
     let v = minY+dy*i
-    v = Math.round(v / 10) * 10
+    v = parseInt(v / minunit) * minunit
     let postfix=""
     arr.push([v + postfix, (v-minY) / (maxY-minY) * height, 1 / maxY * height])
   }
