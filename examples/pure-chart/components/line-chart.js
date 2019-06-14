@@ -123,6 +123,7 @@ class LineChart extends React.Component {
     end,
     backgroundColor,
     lineStyle,
+    seriesColor,
     isBlank,
     lastCoordinate,
     seriesIndex
@@ -175,12 +176,12 @@ class LineChart extends React.Component {
                 height: size,
                 borderColor: isBlank
                   ? backgroundColor
-                  : this.props.primaryColor,
+                  : seriesColor,
                 borderTopWidth: 3,
                 transform: this.getTransform(angleRad, size)
               },
-              styles.lineBox,
-              lineStyle
+              /* styles.lineBox,
+              lineStyle */
             ])}
           />
           <View
@@ -268,11 +269,11 @@ class LineChart extends React.Component {
             style={StyleSheet.flatten([
               styles.pointWrapperTarget,
               {
-                width: 18,
-                height: 3,
+                width: 2,
+                height: 2,
 
-                left: point.gap - size / 2,
-                bottom: point.ratioY - size / 2 + 6,
+                left: point.gap - 2 / 2,
+                bottom: point.ratioY - 2 / 2,
 
                 borderColor: color,
                 backgroundColor: color
@@ -369,6 +370,7 @@ class LineChart extends React.Component {
           data[i + 1],
           'rgba(255,255,255,0)',
           styleDetail,
+          seriesColor,
           false,
           false,
           seriesIndex
@@ -407,6 +409,7 @@ class LineChart extends React.Component {
           lastCoordinate,
           'rgba(255,255,255,0)',
           styleDetail,
+          seriesColor,
           true,
           true,
           seriesIndex
@@ -420,6 +423,7 @@ class LineChart extends React.Component {
           lastCoordinate,
           'rgba(255,255,255,0)',
           customStyle,
+          seriesColor,
           false,
           true,
           seriesIndex
