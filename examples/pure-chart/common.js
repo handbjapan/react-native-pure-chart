@@ -219,7 +219,9 @@ export const getGuideArray_handb = (max, height, minY,maxY,numberOfPoints = 5) =
     v = parseInt(v / minunit) * minunit
     v=parseFloat(v.toFixed(1))
     let postfix=""
-    arr.push([v + postfix, (v-minY) / (maxY-minY) * height, 1 / maxY * height])
+    if(v>=minY && v<=maxY){
+      arr.push([v + postfix, (v-minY) / (maxY-minY) * height, 1 / maxY * height])
+    }
   }
   return arr
 }
