@@ -437,6 +437,10 @@ class LineChart extends React.Component {
     return Math.sqrt(Math.pow(p1[0] - p2[0], 2) + Math.pow(p1[1] - p2[1], 2))
   }
 
+  orgRound(value, base) {
+    return parseFloat(value.toFixed(base));
+  }
+
   drawSelected(index) {
     if (this.state.sortedData.length === 0) return null
     let data = this.state.sortedData[0].data
@@ -468,6 +472,7 @@ class LineChart extends React.Component {
         marginTop = diff * this.props.height
         if (diff !== 0) marginTop = marginTop - 50
       }
+      if(marginTop < 0){ marginTop = 0 }
       return (
         <View
           style={StyleSheet.flatten([
@@ -497,7 +502,7 @@ class LineChart extends React.Component {
               <View>
                 <Text style={styles.tooltipTitle}>目標達成</Text>
                 <Text style={styles.tooltipValue}>
-                  {this.props.completedGoalValue}歩
+                  {this.orgRound(this.props.completedGoalValue,1)}歩
                 </Text>
               </View>
             ) : (
@@ -532,7 +537,7 @@ class LineChart extends React.Component {
                           }}
                         />
                         <Text style={styles.tooltipValue}>
-                          {numberWithCommas(dataObject.y, false)}
+                          {numberWithCommas(this.orgRound(dataObject.y,1), false)}
                         </Text>
                       </View>
                     </View>
