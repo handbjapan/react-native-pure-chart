@@ -151,7 +151,7 @@ export const refineData = (flattenData, max, height, gap, minY, maxY) => {
             dataProp[i-1].y && 
             dataProp[i + nullCount].y
           ){
-          	  dataProp[i].y = parseFloat(parseFloat(dataProp[i - 1].y + (dataProp[i + nullCount].y - dataProp[i - 1].y) / (nullCount + 1)).toFixed(2))
+          	  dataProp[i].y = parseFloat(dataProp[i - 1].y + (dataProp[i + nullCount].y - dataProp[i - 1].y) / (nullCount + 1))
           }
           else if(dataProp[i + nullCount] && dataProp[i + nullCount].y){
              dataProp[i].y = dataProp[i + nullCount].y
