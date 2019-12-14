@@ -57,6 +57,17 @@ class LineChart extends React.Component {
   }
 
   shouldComponentUpdate(nextProps, nextState) {
+    if(this.scrollView != null){
+      if(this.props.initialDisplayPosition=='end'){
+        setTimeout(
+          () => this.scrollView.scrollToEnd({animated: false}), 0
+        )
+      }else if(this.props.initialDisplayPosition=='start'){
+        setTimeout(
+          () => this.scrollView.scrollTo({x: 0, y: 0, animated: false}), 0
+        )
+      }
+    }
     if (
       nextState.sortedData !== this.state.sortedData ||
       nextState.selectedIndex !== this.state.selectedIndex ||
@@ -75,6 +86,17 @@ class LineChart extends React.Component {
       duration: 1000,
       useNativeDriver: true
     }).start()
+    if(this.scrollView != null){
+      if(this.props.initialDisplayPosition=='end'){
+        setTimeout(
+          () => this.scrollView.scrollToEnd({animated: false}), 0
+        )
+      }else if(this.props.initialDisplayPosition=='start'){
+        setTimeout(
+          () => this.scrollView.scrollTo({x: 0, y: 0, animated: false}), 0
+        )
+      }
+    }
   }
 
   componentWillReceiveProps(nextProps) {
