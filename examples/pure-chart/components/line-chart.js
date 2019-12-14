@@ -607,6 +607,7 @@ class LineChart extends React.Component {
         >
           <ScrollView
             horizontal
+            ref={ref => this.scrollView = ref}
             style={{
               flex: 1
             }}
