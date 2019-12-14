@@ -50,7 +50,7 @@ class LineChart extends React.Component {
       showRightLablelCol: this.props.showRightLablelCol,
       showGoalMsg: true,
     }
-	this.scrollView = null
+    this.scrollView = null
     this.drawCoordinates = this.drawCoordinates.bind(this)
     this.drawCoordinate = this.drawCoordinate.bind(this)
     this.drawSelected = this.drawSelected.bind(this)
